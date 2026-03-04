@@ -98,7 +98,7 @@ char scan_keypad(void)
 /* ---- Main ---- */
 void main(void)
 {
-        printk("Starting Keypad Example...\n");
+        printk("Starting Keypad\n");
 
         keypad_init();
 
