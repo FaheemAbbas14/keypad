@@ -82,7 +82,6 @@ char scan_keypad(void)
                                 if (gpio_pin_get_dt(&col_gpios[c]))
                                 {
 
-                                        printk("R%d C%d\n", r + 1, c + 1);
 
                                         return keymap[r][c];
                                 }
