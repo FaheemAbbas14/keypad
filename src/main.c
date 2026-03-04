@@ -1,25 +1,31 @@
 #include <zephyr/kernel.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/sys/printk.h>
-
-/* ---- Pin Definitions ---- */
-
-/* Rows (OUTPUT) */
-#define ROW1 1
-#define ROW2 4
-#define ROW3 5
-#define ROW4 6
-
-/* Columns (INPUT + PULLDOWN) */
-#define COL1 14
-#define COL2 15
-#define COL3 2
-#define COL4 3
+#include <zephyr/sys/util.h>
 
 #define ROWS 4
 #define COLS 4
 
-static const struct device *gpio_dev;
+#define KEYPAD_NODE DT_PATH(zephyr_user)
+
+BUILD_ASSERT(DT_NODE_HAS_PROP(KEYPAD_NODE, row_gpios), "Missing row-gpios in zephyr,user node");
+BUILD_ASSERT(DT_NODE_HAS_PROP(KEYPAD_NODE, col_gpios), "Missing col-gpios in zephyr,user node");
+BUILD_ASSERT(DT_PROP_LEN(KEYPAD_NODE, row_gpios) == ROWS, "row-gpios must have 4 entries");
+BUILD_ASSERT(DT_PROP_LEN(KEYPAD_NODE, col_gpios) == COLS, "col-gpios must have 4 entries");
+
+static const struct gpio_dt_spec row_gpios[ROWS] = {
+        GPIO_DT_SPEC_GET_BY_IDX(KEYPAD_NODE, row_gpios, 0),
+        GPIO_DT_SPEC_GET_BY_IDX(KEYPAD_NODE, row_gpios, 1),
+        GPIO_DT_SPEC_GET_BY_IDX(KEYPAD_NODE, row_gpios, 2),
+        GPIO_DT_SPEC_GET_BY_IDX(KEYPAD_NODE, row_gpios, 3),
+};
+
+static const struct gpio_dt_spec col_gpios[COLS] = {
+        GPIO_DT_SPEC_GET_BY_IDX(KEYPAD_NODE, col_gpios, 0),
+        GPIO_DT_SPEC_GET_BY_IDX(KEYPAD_NODE, col_gpios, 1),
+        GPIO_DT_SPEC_GET_BY_IDX(KEYPAD_NODE, col_gpios, 2),
+        GPIO_DT_SPEC_GET_BY_IDX(KEYPAD_NODE, col_gpios, 3),
+};
 
 /* Keypad layout */
 static const char keymap[4][4] = {
@@ -31,25 +37,23 @@ static const char keymap[4][4] = {
 /* ---- Initialization ---- */
 void keypad_init(void)
 {
-        gpio_dev = DEVICE_DT_GET(DT_NODELABEL(gpio1));
+        for (int i = 0; i < ROWS; i++) {
+                if (!gpio_is_ready_dt(&row_gpios[i])) {
+                        printk("Row GPIO %d not ready\n", i + 1);
+                        return;
+                }
 
-        if (!device_is_ready(gpio_dev))
-        {
-                printk("GPIO device not ready\n");
-                return;
+                gpio_pin_configure_dt(&row_gpios[i], GPIO_OUTPUT_INACTIVE);
         }
 
-        /* Configure rows as OUTPUT HIGH */
-        gpio_pin_configure(gpio_dev, ROW1, GPIO_OUTPUT_HIGH);
-        gpio_pin_configure(gpio_dev, ROW2, GPIO_OUTPUT_HIGH);
-        gpio_pin_configure(gpio_dev, ROW3, GPIO_OUTPUT_HIGH);
-        gpio_pin_configure(gpio_dev, ROW4, GPIO_OUTPUT_HIGH);
+        for (int i = 0; i < COLS; i++) {
+                if (!gpio_is_ready_dt(&col_gpios[i])) {
+                        printk("Column GPIO %d not ready\n", i + 1);
+                        return;
+                }
 
-        /* Configure columns as INPUT + PULLDOWN */
-        gpio_pin_configure(gpio_dev, COL1, GPIO_INPUT | GPIO_PULL_DOWN);
-        gpio_pin_configure(gpio_dev, COL2, GPIO_INPUT | GPIO_PULL_DOWN);
-        gpio_pin_configure(gpio_dev, COL3, GPIO_INPUT | GPIO_PULL_DOWN);
-        gpio_pin_configure(gpio_dev, COL4, GPIO_INPUT | GPIO_PULL_DOWN);
+                gpio_pin_configure_dt(&col_gpios[i], GPIO_INPUT);
+        }
 
         printk("Keypad initialized\n");
 }
@@ -57,28 +61,25 @@ void keypad_init(void)
 /* ---- Scan Function ---- */
 char scan_keypad(void)
 {
-        int rows[ROWS] = {ROW1, ROW2, ROW3, ROW4};
-        int cols[COLS] = {COL1, COL2, COL3, COL4};
-
         for (int row = 0; row < ROWS; row++) {
-                gpio_pin_set(gpio_dev, rows[row], 0);
+                gpio_pin_set_dt(&row_gpios[row], 0);
         }
 
         for (int r = 0; r < ROWS; r++)
         {
-                gpio_pin_set(gpio_dev, rows[r], 1);
+                gpio_pin_set_dt(&row_gpios[r], 1);
                 k_usleep(50);
 
                 for (int c = 0; c < COLS; c++)
                 {
 
-                        if (gpio_pin_get(gpio_dev, cols[c]))
+                        if (gpio_pin_get_dt(&col_gpios[c]))
                         {
 
                                 /* Debounce */
                                 k_msleep(20);
 
-                                if (gpio_pin_get(gpio_dev, cols[c]))
+                                if (gpio_pin_get_dt(&col_gpios[c]))
                                 {
 
                                         printk("R%d C%d\n", r + 1, c + 1);
@@ -89,7 +90,7 @@ char scan_keypad(void)
                 }
 
                 /* Restore row LOW */
-                gpio_pin_set(gpio_dev, rows[r], 0);
+                gpio_pin_set_dt(&row_gpios[r], 0);
         }
 
         return 0;
