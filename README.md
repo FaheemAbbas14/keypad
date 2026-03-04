@@ -40,3 +40,9 @@ Expected logs while pressing keys:
 
 - `R<row> C<col>`
 - `Key pressed: <key>`
+
+## Maintainer
+
+Faheem Abbas  
+Sr Software Engineer  
+faheemabbas60@yahoo.com
